@@ -41,22 +41,22 @@ chmod +x Input-*.AppImage
 
 ### Option 2: Build It Yourself
 
-This option is for users who want to rebuild the application from the official Windows installer.
+This option rebuilds the application from the official Windows installer and packages it as a native Linux AppImage.
 
 ### Requirements
 
-Before running the setup script, ensure the following tools are installed and accessible in your `$PATH`:
+Before running the build script, ensure the following tools are installed and accessible in your `$PATH`:
 
-| Tool             | Purpose                                         | Ubuntu/Debian Install Command                         |
-|------------------|--------------------------------------------------|--------------------------------------------------------|
-| `curl`           | Download files over HTTP(S)                      | `sudo apt install curl`                               |
-| `7z`             | Extract `.exe` and `.7z` archives (`p7zip-full`) | `sudo apt install p7zip-full`                         |
-| `node`           | JavaScript runtime                               | `sudo apt install nodejs`                             |
-| `npm`            | Node.js package manager                          | `sudo apt install npm`                                |
-| `asar`           | Extract and repack `.asar` Electron archives     | `sudo npm install -g asar`                            |
-| `build-essential`| Required for compiling native modules            | `sudo apt install build-essential`                    |
-| `python3.11`     | Compatible Python version with venv support      | `sudo apt install python3.11 python3.11-venv`         |
-| `git`            | Used to clone the repository (optional)          | `sudo apt install git`                                |
+| Tool             | Purpose                                          | Ubuntu/Debian Install Command                         |
+|------------------|---------------------------------------------------|--------------------------------------------------------|
+| `curl`           | Download files over HTTP(S)                       | `sudo apt install curl`                               |
+| `7z`             | Extract `.exe` and `.7z` archives (`p7zip-full`)  | `sudo apt install p7zip-full`                         |
+| `node`           | JavaScript runtime                                | `sudo apt install nodejs`                             |
+| `npm`            | Node.js package manager                           | `sudo apt install npm`                                |
+| `asar`           | Extract and repack `.asar` Electron archives      | `sudo npm install -g asar`                            |
+| `build-essential`| Required for compiling native modules             | `sudo apt install build-essential`                    |
+| `python3.11`     | Compatible Python version with venv support       | `sudo apt install python3.11 python3.11-venv`         |
+| `git`            | Used to clone the repository (optional)           | `sudo apt install git`                                |
 
 Install them all in one step:
 
@@ -70,26 +70,26 @@ sudo npm install -g asar
 
 ### 🛠️ Build Process
 
-The setup script now:
+The build script:
 
-- Creates a virtualenv with Python 3.11+ to ensure a compatible `distutils` environment
-- Installs `setuptools` and a shim for `distutils` to work with modern Python
-- Rebuilds native modules like `node-hid` using the patched environment
-- Applies community patches into `./input-app/`
-- Launches the app with Electron
+- Downloads the official `input-Setup-0.15.3.exe` Windows installer
+- Extracts the app and auto-detects the bundled Electron version
+- Rebuilds native modules (`node-hid`, `serialport`, etc.) for Linux
+- Injects Linux-specific patches
+- Packages everything into a standalone `.AppImage` using `electron-builder`
 
 Run it:
 
 ```bash
 git clone https://github.com/worklouder/input-linux.git
 cd input-linux
-bash input4linux-0.8.2.sh
+bash input4linux-0.15.3.sh
 ```
 
 Launch the app:
 
 ```bash
-./input-app/start.sh
+./Input-0.15.3-Community.AppImage
 ```
 
 ---
@@ -110,16 +110,17 @@ Afterward, **unplug and replug your keyboard** before launching the app.
 
 ## Troubleshooting
 
-- If `node-hid` fails to build and you’re using Python 3.12 or newer, ensure the build script properly activates its virtualenv.
+- If `node-hid` or `serialport` fail to build and you're using Python 3.12 or newer, ensure the build script properly activates its virtualenv.
 - Use Python 3.11+ for best compatibility with `node-gyp`.
 - If the app launches but doesn’t detect your device, ensure udev rules are installed (see above).
-- The build script defaults to `TEST_MODE=true`, which skips over non-critical errors. You can run it in strict mode like this:
+- The build script defaults to strict mode (`TEST_MODE=false`). You can run in lenient mode like this:
 
 ```bash
-TEST_MODE=false ./input4linux-0.8.2.sh
+TEST_MODE=true ./input4linux-0.15.3.sh
 ```
 
-- If you were previously using `npm config set python`, that’s no longer needed. The build script uses `export PYTHON=...` automatically now.
+- The Electron version is auto-detected from the Windows installer. If detection fails, the script will exit with an error pointing to the extracted `app-64/version` file.
+- `npm config set python` is no longer needed. The build script uses `export PYTHON=...` automatically.
 
 ---
 

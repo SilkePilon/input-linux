@@ -1,0 +1,13 @@
+# Build output
+*.AppImage
+
+# Temporary build directories
+input_download/
+input_extracted/
+input_rebuild/
+input_work/
+input-app/
+
+# Accidentally-placed root package.json from aborted build runs
+/package.json
+/package-lock.json
