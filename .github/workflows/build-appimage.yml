@@ -1,0 +1,75 @@
+name: Build and Release Input AppImage
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.15.3-Community)'
+        required: false
+        default: 'v0.15.3-Community'
+  push:
+    tags:
+      - 'v*-Community'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            curl \
+            p7zip-full \
+            build-essential \
+            python3 \
+            python3-venv
+          sudo npm install -g asar
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build AppImage
+        run: bash input4linux-0.15.3.sh
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Input ${{ steps.tag.outputs.name }}
+          body: |
+            Community-built Linux AppImage for Input ${{ steps.tag.outputs.name }}.
+
+            Built from the official Windows installer using [input-linux](https://github.com/worklouder/input-linux).
+
+            ### Installation
+            ```bash
+            chmod +x Input-*.AppImage
+            ./Input-*.AppImage
+            ```
+
+            You may also need to install udev rules for your device:
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/worklouder/input-linux/main/patch/dist-electron/scripts/install-udev-worklouder.sh | sudo bash
+            ```
+          files: Input-*.AppImage
+          draft: false
+          prerelease: false
+          make_latest: true
