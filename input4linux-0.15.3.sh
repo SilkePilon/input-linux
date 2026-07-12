@@ -619,6 +619,71 @@ PYEOF
 )
 
 # ---------------------------------------------------------------------------
+# Step 8d – Rename ESM preloads (.mjs) to CommonJS (.cjs)
+# ---------------------------------------------------------------------------
+# The app's package.json has "type": "module", which makes ALL .js files
+# ESM. The preload scripts are .mjs (ESM by extension) and use
+# `require("electron")` to get contextBridge/ipcRenderer, then call
+# `contextBridge.exposeInMainWorld(...)` to expose IPC channels
+# (localStorageChannel, commonChannel, etc.) to the renderer.
+#
+# Per the Electron ESM docs, sandboxed preload scripts (the default since
+# Electron 20) are "run as plain JavaScript without an ESM context" and
+# "Sandboxed preload scripts can't use ESM imports".  In Electron 40 on
+# Linux, a .mjs preload in a sandboxed renderer silently fails to load —
+# contextBridge.exposeInMainWorld never runs, so every channel global
+# (localStorageChannel, commonChannel, fsChannel, etc.) is undefined in
+# the renderer.  The renderer JS throws
+# `ReferenceError: localStorageChannel is not defined` and the window stays
+# blank/white.
+#
+# Fix: rename the .mjs preloads to .cjs (CommonJS).  The .cjs extension
+# forces CommonJS interpretation regardless of "type": "module", so
+# `require("electron")` works and contextBridge.exposeInMainWorld runs
+# successfully.  Update the path references in dist-electron/main/index.js
+# to match.
+echo "▸ Renaming ESM preloads (.mjs → .cjs) to fix contextBridge exposure..."
+(
+    cd "$UNPACKED_DIR"
+    python3 - << 'PYEOF'
+import os
+import sys
+
+# 1. Rename preload files
+renames = [
+    ("dist-electron/preload/preload.mjs", "dist-electron/preload/preload.cjs"),
+    ("dist-electron/preload/radial_menu_preload.mjs", "dist-electron/preload/radial_menu_preload.cjs"),
+]
+for old_name, new_name in renames:
+    if os.path.exists(old_name):
+        os.rename(old_name, new_name)
+        print(f"  Renamed: {old_name} → {new_name}")
+    else:
+        print(f"  WARNING: {old_name} not found – skipping", file=sys.stderr)
+
+# 2. Update path references in dist-electron/main/index.js
+path = "dist-electron/main/index.js"
+with open(path, "r") as f:
+    content = f.read()
+
+replacements = [
+    ('"../preload/preload.mjs"', '"../preload/preload.cjs"'),
+    ('"../preload/radial_menu_preload.mjs"', '"../preload/radial_menu_preload.cjs"'),
+]
+for old, new in replacements:
+    if old in content:
+        content = content.replace(old, new)
+        print(f"  Updated: {old} → {new}")
+    else:
+        print(f"  WARNING: Could not find {old} – skipping", file=sys.stderr)
+
+with open(path, "w") as f:
+    f.write(content)
+print("preload rename patch applied successfully")
+PYEOF
+)
+
+# ---------------------------------------------------------------------------
 # Step 9 – Build AppImage with electron-builder
 # ---------------------------------------------------------------------------
 
