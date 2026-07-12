@@ -42,6 +42,16 @@
         "from": "AppRun",
         "to": "AppRun",
         "filter": ["AppRun"]
+      },
+      {
+        "from": "electron-edge-bootstrap/lib-bootstrap",
+        "to": "resources/app.asar.unpacked/node_modules/electron-edge-js/lib/bootstrap/bin/Release",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "electron-edge-bootstrap/lib-double",
+        "to": "resources/app.asar.unpacked/node_modules/electron-edge-js/src/double/Edge.js/bin/Release/net8.0",
+        "filter": ["**/*"]
       }
     ],
     "linux": {

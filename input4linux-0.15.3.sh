@@ -402,6 +402,25 @@ echo "▸ Installing dependencies (this may take a while)..."
         rm -f build/Release/edge_nativeclr.node
     ) || handle_error "electron-edge-js build failed"
     echo "▸ electron-edge-js built successfully"
+
+    # electron-builder excludes .dll files on non-Windows platforms.
+    # Copy all compiled bootstrap/EdgeJs DLLs to a staging directory outside
+    # node_modules so they survive any electron-builder file filtering. They are
+    # brought back into the AppImage at the exact runtime path via extraFiles.
+    echo "▸ Stashing bootstrap DLLs for AppImage packaging..."
+    rm -rf electron-edge-bootstrap
+    mkdir -p electron-edge-bootstrap/lib-bootstrap \
+              electron-edge-bootstrap/lib-double
+    # All files from bootstrap output dir (bootstrap.dll, bootstrap.runtimeconfig.json,
+    # EdgeJs.dll that dotnet copied there, plus any other .dll/.json files)
+    cp node_modules/electron-edge-js/lib/bootstrap/bin/Release/* \
+       electron-edge-bootstrap/lib-bootstrap/ 2>/dev/null || true
+    # EdgeJs.dll from the double bridge build
+    find node_modules/electron-edge-js/src/double -name "*.dll" \
+         -exec cp {} electron-edge-bootstrap/lib-double/ \; 2>/dev/null || true
+    echo "  Bootstrap stash contents:"
+    ls -lh electron-edge-bootstrap/lib-bootstrap/ 2>/dev/null || echo "  (empty — DLLs may be missing)"
+    ls -lh electron-edge-bootstrap/lib-double/ 2>/dev/null || true
 )
 
 # ---------------------------------------------------------------------------
