@@ -30,6 +30,7 @@
       "node_modules/**"
     ],
     "asarUnpack": [
+      "node_modules/electron-edge-js/**",
       "node_modules/node-hid/**",
       "node_modules/serialport/**",
       "node_modules/@serialport/**",

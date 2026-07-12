@@ -344,8 +344,9 @@ echo "▸ Installing dependencies (this may take a while)..."
     cd "$UNPACKED_DIR"
 
     # Install JS dependencies without running native-module build scripts.
-    # All native modules in this app ship N-API prebuilts, so there is no
-    # need to compile from source (which would require system headers).
+    # Most native modules ship N-API prebuilts. The exception is
+    # electron-edge-js which has no Linux prebuilts and must be compiled
+    # from source (handled explicitly below).
     ELECTRON_VERSION="$ELECTRON_VERSION" npm install --ignore-scripts \
         || handle_error "npm install failed"
 
@@ -354,7 +355,7 @@ echo "▸ Installing dependencies (this may take a while)..."
         || handle_error "Failed to install electron"
 
     # Set up native module prebuilts.
-    # All native modules ship platform-specific N-API prebuilt binaries which
+    # Most native modules ship platform-specific N-API prebuilt binaries which
     # are ABI-stable and work with both Node.js and Electron without recompiling.
     echo "▸ Setting up native module prebuilts..."
 
@@ -367,6 +368,19 @@ echo "▸ Installing dependencies (this may take a while)..."
         || echo "▸ lzma-native prebuilt not set up (non-fatal, loads at runtime)"
 
     # @serialport/bindings-cpp: uses node-gyp-build at runtime — no setup needed
+
+    # electron-edge-js: ships no Linux prebuilt — must compile edge_coreclr.node
+    # from source using node-gyp against Electron headers. The binding.gyp also
+    # builds lib/bootstrap/bootstrap.dll if 'dotnet' is in PATH.
+    echo "▸ Building electron-edge-js for Electron ${ELECTRON_VERSION}..."
+    (
+        cd node_modules/electron-edge-js
+        HOME=~/.electron-gyp npx node-gyp rebuild \
+            --target="${ELECTRON_VERSION}" \
+            --arch=x64 \
+            --dist-url=https://electronjs.org/headers
+    ) || handle_error "electron-edge-js build failed"
+    echo "▸ electron-edge-js built successfully"
 )
 
 # ---------------------------------------------------------------------------

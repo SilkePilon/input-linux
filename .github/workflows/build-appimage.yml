@@ -29,8 +29,15 @@ jobs:
             p7zip-full \
             build-essential \
             python3 \
-            python3-venv
+            python3-venv \
+            libssl-dev \
+            libfuse2
           sudo npm install -g asar
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
