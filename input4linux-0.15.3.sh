@@ -370,10 +370,15 @@ echo "▸ Installing dependencies (this may take a while)..."
     # @serialport/bindings-cpp: uses node-gyp-build at runtime — no setup needed
 
     # electron-edge-js: ships no Linux prebuilt — must compile edge_coreclr.node
-    # from source using node-gyp against Electron headers. The binding.gyp also
-    # builds lib/bootstrap/bootstrap.dll if 'dotnet' is in PATH.
+    # from source using node-gyp against Electron headers.
+    # The existing node_modules/electron-edge-js comes from the Windows app.asar
+    # and doesn't include binding.gyp or source files. Remove it and reinstall
+    # fresh from npm to get all sources, then compile.
     echo "▸ Building electron-edge-js for Electron ${ELECTRON_VERSION}..."
     (
+        rm -rf node_modules/electron-edge-js
+        npm install --ignore-scripts electron-edge-js \
+            || handle_error "electron-edge-js reinstall failed"
         cd node_modules/electron-edge-js
         HOME=~/.electron-gyp npx node-gyp rebuild \
             --target="${ELECTRON_VERSION}" \
