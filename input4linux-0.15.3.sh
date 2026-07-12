@@ -374,16 +374,24 @@ echo "▸ Installing dependencies (this may take a while)..."
     # The existing node_modules/electron-edge-js comes from the Windows app.asar
     # and doesn't include binding.gyp or source files. Remove it and reinstall
     # fresh from npm to get all sources, then compile.
-    echo "▸ Building electron-edge-js for Electron ${ELECTRON_VERSION}..."
+    #
+    # Build CoreCLR-only: set PKG_CONFIG_LIBDIR to an empty directory so that
+    # pkg-config mono-2 fails. binding.gyp only links libmonosgen-2.0 when BOTH
+    # `which mono` AND `pkg-config mono-2 --libs` succeed. Preventing pkg-config
+    # from finding mono-2.pc ensures the resulting .node file has no
+    # libmonosgen-2.0.so.1 dependency — which most users don't have installed.
+    echo "▸ Building electron-edge-js for Electron ${ELECTRON_VERSION} (CoreCLR only)..."
     (
         rm -rf node_modules/electron-edge-js
         npm install --ignore-scripts electron-edge-js \
             || handle_error "electron-edge-js reinstall failed"
         cd node_modules/electron-edge-js
-        HOME=~/.electron-gyp npx node-gyp rebuild \
+        FAKE_PC=$(mktemp -d)
+        HOME=~/.electron-gyp PKG_CONFIG_LIBDIR="$FAKE_PC" npx node-gyp rebuild \
             --target="${ELECTRON_VERSION}" \
             --arch=x64 \
             --dist-url=https://electronjs.org/headers
+        rm -rf "$FAKE_PC"
     ) || handle_error "electron-edge-js build failed"
     echo "▸ electron-edge-js built successfully"
 )
