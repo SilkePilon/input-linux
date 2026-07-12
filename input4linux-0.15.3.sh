@@ -380,6 +380,11 @@ echo "▸ Installing dependencies (this may take a while)..."
     # `which mono` AND `pkg-config mono-2 --libs` succeed. Preventing pkg-config
     # from finding mono-2.pc ensures the resulting .node file has no
     # libmonosgen-2.0.so.1 dependency — which most users don't have installed.
+    # Also remove edge_nativeclr.node after build: binding.gyp still compiles it
+    # when `which mono` succeeds (even without pkg-config). edge.js picks
+    # edge_nativeclr.node over edge_coreclr.node when it exists, so we delete it
+    # to force the CoreCLR path. AppRun also sets EDGE_USE_CORECLR=1 as a runtime
+    # safety net.
     echo "▸ Building electron-edge-js for Electron ${ELECTRON_VERSION} (CoreCLR only)..."
     (
         rm -rf node_modules/electron-edge-js
@@ -392,6 +397,9 @@ echo "▸ Installing dependencies (this may take a while)..."
             --arch=x64 \
             --dist-url=https://electronjs.org/headers
         rm -rf "$FAKE_PC"
+        # Remove the Mono-based native CLR module if compiled: it can't work
+        # without libmonosgen installed, and edge.js prefers it over edge_coreclr.
+        rm -f build/Release/edge_nativeclr.node
     ) || handle_error "electron-edge-js build failed"
     echo "▸ electron-edge-js built successfully"
 )
