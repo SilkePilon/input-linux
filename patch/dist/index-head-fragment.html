@@ -1,0 +1,75 @@
+    <style>
+      #udev-popup {
+        display: none; /* Hidden by default to avoid flash */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.7);
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+
+      #udev-popup.show {
+        display: flex;
+      }
+
+      #udev-popup-content {
+        position: relative;
+        background: #fff;
+        padding: 2rem;
+        border-radius: 25px;
+        max-width: 400px;
+        text-align: center;
+        font-family: sans-serif;
+        box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+      }
+
+      #udev-popup-content h2 {
+        margin-top: 0;
+        font-size: 40;
+        margin-bottom: 1rem;
+      }
+
+      #udev-popup-content button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 30px;
+        font-size: 1rem;
+        cursor: pointer;
+        margin-top: 0rem;
+      }
+
+      #udev-popup-content button2 {
+        padding: 5px 14px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 30px;
+        font-size: 1rem;
+        cursor: pointer;
+        margin-top: 0rem;
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: transparent;
+        border: none;
+        font-size: 1.2rem;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1.5;
+        background-color: #cc1818;
+      }
+
+      #udev-popup-content button:hover {
+        background-color: #0056b3;
+      }
+
+      #udev-popup-content button2:hover {
+        background-color: #820d0d;
+      }
+    </style>

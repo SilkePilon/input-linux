@@ -1,0 +1,96 @@
+    <!-- Udev Setup Popup -->
+    <div id="udev-popup">
+      <div id="udev-popup-content">
+        <button2 id="udev-close-btn" title="Close popup">×</button2>
+        <h2>Device Setup Required</h2>
+        <h4>To enable access to your Work Louder device, run the following command in a terminal:</h4>
+        <pre style="background:#f3f3f3;padding:0.5em;border-radius:5px;font-size:0.85em;overflow:auto;">
+curl -sSL https://raw.githubusercontent.com/worklouder/input-linux/main/patch/dist-electron/scripts/install-udev-worklouder.sh | sudo bash</pre>
+        <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1rem;">
+          <button id="run-udev-btn">Copy</button>
+          <button id="hide-udev-btn">Don't show again</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.addEventListener('DOMContentLoaded', () => {
+        const popup = document.getElementById('udev-popup');
+        const btn = document.getElementById('run-udev-btn');
+        const udevSetupDone = localStorage.getItem('udev-setup-done');
+
+        if (udevSetupDone !== 'true') {
+          popup.classList.add('show');
+        }
+
+        const closeBtn = document.getElementById('udev-close-btn');
+        closeBtn.addEventListener('click', () => {
+          popup.classList.remove('show');
+        });
+
+        btn.addEventListener('click', () => {
+          const command = 'curl -sSL https://raw.githubusercontent.com/worklouder/input-linux/main/patch/dist-electron/scripts/install-udev-worklouder.sh | sudo bash';
+          navigator.clipboard.writeText(command).then(() => {
+            alert('Command copied to clipboard:\n\n' + command);
+          }).catch(() => {
+            alert('Copy failed. Please copy manually:\n\n' + command);
+          });
+          popup.classList.remove('show');
+          localStorage.setItem('udev-setup-done', 'true');
+        });
+
+        const hideBtn = document.getElementById('hide-udev-btn');
+        hideBtn.addEventListener('click', () => {
+          localStorage.setItem('udev-setup-done', 'true');
+          popup.classList.remove('show');
+        });
+
+        const observer = new MutationObserver(() => {
+          const syncBanner = document.querySelector('[class*="sync_countdown_container"]');
+          const releaseButton = document.querySelector('._release__button_1jm4y_1');
+
+          const connectionText = document.querySelector('._connection__text_vh5hj_19');
+          if (connectionText && !connectionText.dataset.listenerAttached) {
+            connectionText.style.cursor = 'pointer';
+            connectionText.title = 'Click to reinstall udev permissions';
+            connectionText.addEventListener('click', () => {
+              localStorage.removeItem('udev-setup-done');
+              popup.classList.add('show');
+            });
+            connectionText.dataset.listenerAttached = "true";
+          }
+
+          if (releaseButton && !releaseButton.dataset.listenerAttached) {
+            releaseButton.style.cursor = 'pointer';
+            releaseButton.title = 'View latest releases on GitHub';
+            releaseButton.innerText = 'New Input version available. View on GitHub!';
+            releaseButton.addEventListener('click', () => {
+              window.open('https://github.com/worklouder/input-linux/releases', '_blank');
+            });
+            releaseButton.dataset.listenerAttached = "true";
+          }
+
+          const inputMenu = document.querySelector('#input-dropdown-menu');
+          if (inputMenu && !document.getElementById('udev-menu-item')) {
+            const udevItem = document.createElement('li');
+            udevItem.textContent = 'Run Udev Setup';
+            udevItem.id = 'udev-menu-item';
+            udevItem.style.cursor = 'pointer';
+            udevItem.addEventListener('click', () => {
+              localStorage.removeItem('udev-setup-done');
+              popup.classList.add('show');
+            });
+            inputMenu.appendChild(udevItem);
+          }
+
+          if (syncBanner && connectionText && releaseButton) {
+            observer.disconnect();
+          }
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+        });
+      });
+    </script>

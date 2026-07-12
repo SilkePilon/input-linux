@@ -244,6 +244,11 @@ fi
 
 ORIGINAL_INDEX="$UNPACKED_DIR/dist-electron/main/index.js"
 
+# dist/index.html and the udev popup fragments used to inject into it
+DIST_INDEX="$UNPACKED_DIR/dist/index.html"
+HEAD_FRAG="$PATCH_DIR/dist/index-head-fragment.html"
+BODY_FRAG="$PATCH_DIR/dist/index-body-fragment.html"
+
 if [[ ! -f "$ORIGINAL_INDEX" ]]; then
     handle_error "dist-electron/main/index.js not found in unpacked asar"
 fi
@@ -265,10 +270,17 @@ rm "$TEMP_INDEX"
 if [[ -d "$PATCH_DIR" ]]; then
     echo "▸ Applying patch files from $PATCH_DIR..."
 
-    # Copy everything except dist-electron/main/index.js and package.json
+    # Copy everything except dist-electron/main/index.js, package.json,
+    # and dist/index.html — those are handled by dedicated patch steps
+    # below (dist/index.html is injected, not overwritten, so that the
+    # version-specific <script>/<link> asset hashes from the original
+    # app are preserved).
     find "$PATCH_DIR" -type f \
         ! -path "$PATCH_DIR/dist-electron/main/index.js" \
         ! -path "$PATCH_DIR/package.json" \
+        ! -path "$PATCH_DIR/dist/index.html" \
+        ! -path "$PATCH_DIR/dist/index-head-fragment.html" \
+        ! -path "$PATCH_DIR/dist/index-body-fragment.html" \
         | while IFS= read -r src; do
             rel="${src#$PATCH_DIR/}"
             dest="$UNPACKED_DIR/$rel"
@@ -280,6 +292,53 @@ if [[ -d "$PATCH_DIR" ]]; then
         chmod +x "$UNPACKED_DIR/AppRun"
     fi
 fi
+
+# ---------------------------------------------------------------------------
+# Step 5b – Inject udev popup into dist/index.html
+# ---------------------------------------------------------------------------
+# The original dist/index.html shipped by each Input version references
+# version-specific bundled asset filenames (e.g. main-B7BunvDx.js) via
+# <script>/<link> tags. Overwriting it with a static patch copy breaks
+# the app on any version whose asset hashes differ — the renderer JS
+# never loads, contextBridge globals like `localStorageChannel` are
+# never consumed, and the window stays blank.
+#
+# Instead, inject the udev popup <style> before </head> and the popup
+# markup + <script> before </body> into the original index.html.
+echo "▸ Injecting udev popup into dist/index.html..."
+(
+    cd "$UNPACKED_DIR"
+    python3 - "$DIST_INDEX" "$HEAD_FRAG" "$BODY_FRAG" << 'PYEOF'
+import sys
+
+index_path, head_frag_path, body_frag_path = sys.argv[1:4]
+
+with open(index_path, "r", encoding="utf-8") as f:
+    html = f.read()
+
+with open(head_frag_path, "r", encoding="utf-8") as f:
+    head_frag = f.read()
+
+with open(body_frag_path, "r", encoding="utf-8") as f:
+    body_frag = f.read()
+
+if "</head>" not in html:
+    print("  WARNING: no </head> tag found — head fragment not injected", file=sys.stderr)
+else:
+    html = html.replace("</head>", head_frag + "\n  </head>", 1)
+    print("  Injected head fragment before </head>")
+
+if "</body>" not in html:
+    print("  WARNING: no </body> tag found — body fragment not injected", file=sys.stderr)
+else:
+    html = html.replace("</body>", body_frag + "\n  </body>", 1)
+    print("  Injected body fragment before </body>")
+
+with open(index_path, "w", encoding="utf-8") as f:
+    f.write(html)
+print("dist/index.html patched successfully (original asset references preserved)")
+PYEOF
+)
 
 # ---------------------------------------------------------------------------
 # Step 7 – Merge electron-builder config into app's package.json
@@ -500,6 +559,62 @@ else:
 with open(path, "w") as f:
     f.write(content)
 print("edge.js patched successfully")
+PYEOF
+)
+
+# ---------------------------------------------------------------------------
+# Step 8c – Patch dist-electron/main/index.js for tray icon crash on Linux
+# ---------------------------------------------------------------------------
+# On Linux, Electron's nativeImage/Tray cannot decode the Windows .ico file
+# used for the tray icon ("Error: Failed to load image from path
+# '.../tray_icon.ico'"). new Tray() throws when given an empty/undecodable
+# image, and that throw happens inside the async whenReady().then() startup
+# callback as an *unhandled promise rejection* — which aborts the rest of
+# that callback (theme sync, device search listeners, analytics "app start"
+# event, etc.) without ever showing an error dialog. The main window is
+# still created, but it never receives the initialization it depends on,
+# which is what shows up to users as an app that "opens" to a white page.
+#
+# Fix:
+#   1. Use the already-bundled tray_icon_Template.png (known-good PNG) on
+#      Linux instead of the .ico, mirroring what's already done for macOS.
+#   2. Defensively wrap the createNewTray() call in try/catch so a tray
+#      icon failure can never again take down the rest of app startup.
+echo "▸ Patching dist-electron/main/index.js to fix Linux tray icon crash..."
+(
+    cd "$UNPACKED_DIR"
+    python3 - << 'PYEOF'
+import sys
+
+path = "dist-electron/main/index.js"
+with open(path, "r") as f:
+    content = f.read()
+
+# 1. Use the PNG tray icon (already shipped for macOS) on every platform
+#    except Windows, since Linux can't reliably decode the .ico file.
+old1 = 'process.platform === "darwin" ? "tray_icon_Template.png" : "tray_icon.ico"'
+new1 = 'process.platform === "win32" ? "tray_icon.ico" : "tray_icon_Template.png"'
+if old1 in content:
+    content = content.replace(old1, new1)
+    print("  Patched: tray icon path uses PNG on non-Windows platforms")
+else:
+    print("  WARNING: Could not find tray icon path expression – skipping", file=sys.stderr)
+
+# 2. Wrap the createNewTray() call in try/catch so a failure here can't
+#    abort the rest of the startup callback (theme sync, device listeners,
+#    analytics, etc.) via an unhandled promise rejection.
+old2 = "y.get().trayService.createNewTray(),"
+new2 = ("(() => { try { y.get().trayService.createNewTray(); } "
+        "catch (trayErr) { console.error('|tray_service| failed to create tray: ' + trayErr); } })(),")
+if old2 in content:
+    content = content.replace(old2, new2, 1)
+    print("  Patched: createNewTray() call wrapped in try/catch")
+else:
+    print("  WARNING: Could not find createNewTray() call – skipping", file=sys.stderr)
+
+with open(path, "w") as f:
+    f.write(content)
+print("index.js tray patch applied successfully")
 PYEOF
 )
 
