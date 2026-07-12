@@ -443,6 +443,67 @@ RUNTIMECONFIG
 )
 
 # ---------------------------------------------------------------------------
+# Step 8b – Patch edge.js for graceful .NET absence
+# ---------------------------------------------------------------------------
+# edge_coreclr.node initializes the .NET CLR at dlopen time.  If .NET 8
+# runtime is not installed on the user's machine the require() throws and
+# crashes the whole Electron main process.
+# The app already handles errors from .NET calls gracefully (the callbacks
+# return undefined), so we only need to prevent the startup crash.
+# Wrap require(edgeNative) in try/catch and make exports.func a no-op when
+# edge failed to load.
+echo "▸ Patching edge.js for graceful .NET absence handling..."
+(
+    cd "$UNPACKED_DIR"
+    python3 - << 'PYEOF'
+import sys
+
+path = "node_modules/electron-edge-js/lib/edge.js"
+with open(path, "r") as f:
+    content = f.read()
+
+# 1. Wrap require(edgeNative) in try/catch so startup doesn't crash when
+#    the .NET 8 runtime is absent on the end-user's machine.
+old1 = "if (process.versions['electron'] || process.versions['atom-shell'] || process.env.ELECTRON_RUN_AS_NODE) {\n    edge = require(edgeNative);\n}"
+new1 = ("if (process.versions['electron'] || process.versions['atom-shell'] || process.env.ELECTRON_RUN_AS_NODE) {\n"
+        "    try {\n"
+        "        edge = require(edgeNative);\n"
+        "    } catch(e) {\n"
+        "        if (process.env.EDGE_DEBUG) {\n"
+        "            console.warn('electron-edge-js: .NET runtime not available, C# interop disabled:', e.message);\n"
+        "        }\n"
+        "    }\n"
+        "}")
+if old1 in content:
+    content = content.replace(old1, new1)
+    print("  Patched: require(edgeNative) wrapped in try/catch")
+else:
+    print("  WARNING: Could not find require(edgeNative) block – skipping", file=sys.stderr)
+
+# 2. Add a guard at the top of exports.func so calling hC.func() when edge
+#    failed to load returns a callback-error instead of crashing.
+old2 = "exports.func = function (language, options) {"
+new2 = ("exports.func = function (language, options) {\n"
+        "    if (!edge) {\n"
+        "        return function(input, callback) {\n"
+        "            if (typeof callback === 'function') {\n"
+        "                callback(new Error('electron-edge-js: .NET runtime not available on this system'), null);\n"
+        "            }\n"
+        "        };\n"
+        "    }")
+if old2 in content:
+    content = content.replace(old2, new2, 1)
+    print("  Patched: exports.func guard added")
+else:
+    print("  WARNING: Could not find exports.func – skipping", file=sys.stderr)
+
+with open(path, "w") as f:
+    f.write(content)
+print("edge.js patched successfully")
+PYEOF
+)
+
+# ---------------------------------------------------------------------------
 # Step 9 – Build AppImage with electron-builder
 # ---------------------------------------------------------------------------
 
