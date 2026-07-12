@@ -244,8 +244,8 @@ fi
 
 ORIGINAL_INDEX="$UNPACKED_DIR/dist-electron/main/index.js"
 
-# dist/index.html and the udev popup fragments used to inject into it
-DIST_INDEX="$UNPACKED_DIR/dist/index.html"
+# Udev popup fragments injected into dist/index.html (Step 5b).
+# These are absolute paths so they remain valid after `cd "$UNPACKED_DIR"`.
 HEAD_FRAG="$PATCH_DIR/dist/index-head-fragment.html"
 BODY_FRAG="$PATCH_DIR/dist/index-body-fragment.html"
 
@@ -308,7 +308,7 @@ fi
 echo "▸ Injecting udev popup into dist/index.html..."
 (
     cd "$UNPACKED_DIR"
-    python3 - "$DIST_INDEX" "$HEAD_FRAG" "$BODY_FRAG" << 'PYEOF'
+    python3 - "dist/index.html" "$HEAD_FRAG" "$BODY_FRAG" << 'PYEOF'
 import sys
 
 index_path, head_frag_path, body_frag_path = sys.argv[1:4]
