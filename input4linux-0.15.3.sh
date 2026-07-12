@@ -421,6 +421,25 @@ echo "▸ Installing dependencies (this may take a while)..."
     echo "  Bootstrap stash contents:"
     ls -lh electron-edge-bootstrap/lib-bootstrap/ 2>/dev/null || echo "  (empty — DLLs may be missing)"
     ls -lh electron-edge-bootstrap/lib-double/ 2>/dev/null || true
+
+    # bootstrap.runtimeconfig.json is only generated for executable (.exe) projects.
+    # bootstrap.csproj is a class library, so dotnet never creates it.
+    # Without this file, coreclrembedding.cpp fails with "Could not find any
+    # runtimeconfig file". Create a minimal one targeting net8.0.
+    if [ ! -f electron-edge-bootstrap/lib-bootstrap/bootstrap.runtimeconfig.json ]; then
+        echo "▸ Creating bootstrap.runtimeconfig.json (not generated for library targets)..."
+        cat > electron-edge-bootstrap/lib-bootstrap/bootstrap.runtimeconfig.json << 'RUNTIMECONFIG'
+{
+  "runtimeOptions": {
+    "tfm": "net8.0",
+    "framework": {
+      "name": "Microsoft.NETCore.App",
+      "version": "8.0.0"
+    }
+  }
+}
+RUNTIMECONFIG
+    fi
 )
 
 # ---------------------------------------------------------------------------
