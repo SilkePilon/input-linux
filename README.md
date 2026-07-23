@@ -22,17 +22,17 @@
   <a href="#how-it-works">How it works</a>
 </p>
 
-Work Louder's **Input** app configures their keyboards and macropads — but it only
+Work Louder's **Input** app configures their keyboards and macropads, but it only
 ships for Windows and macOS. This project repackages the official Windows release
-into a Linux **AppImage**, patched so it actually works on Linux, and rebuilds it
-automatically whenever Work Louder publishes a new version.
+as a Linux **AppImage** with the fixes it needs to actually run, and rebuilds it
+whenever Work Louder puts out a new version.
 
 > [!WARNING]
 > This is an **unofficial, community-developed** port. It has been acknowledged and
 > welcomed by Work Louder Inc., but it is **not officially supported or maintained
 > by them**, and functionality and stability are not guaranteed.
 >
-> The software is provided **"as is"**, without warranties of any kind — use it at
+> The software is provided **"as is"**, without warranties of any kind. Use it at
 > your own risk. Work Louder does not guarantee the safety, integrity or reliability
 > of anything downloaded from this repository, and cannot be held liable for any
 > damages or legal claims arising from its use or distribution. You are responsible
@@ -41,27 +41,31 @@ automatically whenever Work Louder publishes a new version.
 
 ## Install
 
-Download the latest `.AppImage` from the [Releases page](https://github.com/SilkePilon/input-linux/releases/latest), then:
+Grab the latest `.AppImage` from the
+[Releases page](https://github.com/SilkePilon/input-linux/releases/latest).
+
+The easiest way to use it is [AppManager](https://github.com/kem-a/AppManager).
+Drag the file in and it handles the rest: desktop entry, icon, background updates,
+and clean removal later. It also runs AppImages without FUSE installed, which saves
+you the most common bit of setup. [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever)
+does much the same job if you already have it.
+
+To just run the file directly:
 
 ```bash
 chmod +x Input-*.AppImage
 ./Input-*.AppImage
 ```
 
-Some distributions need FUSE before an AppImage will run:
+Most distributions need FUSE for that:
 
 ```bash
 sudo apt install libfuse2
 ```
 
-> [!NOTE]
-> To get a desktop entry, an icon and automatic updates handled for you, install it
-> with [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) instead of running
-> the file directly.
-
 ## Updates
 
-There are two separate things called "updates" here, and they work independently.
+Two different things get called "updates" here. They work independently.
 
 | | What it does | How often |
 | --- | --- | --- |
@@ -70,55 +74,56 @@ There are two separate things called "updates" here, and they work independently
 
 Releases come in two flavours, matching what Work Louder publishes upstream:
 
-- **Stable** — normal releases. This is what you get from the Releases page by
-  default, and what most people want.
-- **Pre-release** — built from upstream release candidates (`-rc`) and marked as
+- **Stable**: normal releases. This is what the Releases page gives you by default,
+  and what most people want.
+- **Pre-release**: built from upstream release candidates (`-rc`) and marked as
   pre-releases on GitHub. Newer features, rougher edges. They never show up as
-  "latest", so you only get one if you deliberately pick it.
+  "latest", so you only get one by deliberately picking it.
 
-Every release is built from the official Windows installer for that exact version
-and is smoke-tested before it is published — if the app fails to start, the release
-is never created.
+Every release is built from the official Windows installer for that exact version,
+then started and checked before it goes out. If the app fails to launch, no release
+is created.
 
 ## What's changed from the official app
 
-This is Work Louder's own app, repackaged — not a reimplementation and not a
-rebuild from source. The build downloads the official Windows installer straight
+This is Work Louder's own app, repackaged. It isn't a reimplementation and it isn't
+rebuilt from source. The build downloads the official Windows installer straight
 from [Work Louder's release page](https://github.com/worklouder/input-releases/releases),
 unpacks the Electron app inside it, and changes as little as possible to make it
 run on Linux.
 
-Concretely, for the 0.17.2 build:
+For the 0.17.2 build:
 
 - **All 41 files of the app's compiled interface are byte-for-byte identical** to
-  the official release. The only renderer file touched is `index.html`, which gets
+  the official release. The only interface file touched is `index.html`, which gets
   a `<style>` and a `<script>` appended for the Linux window chrome and the udev
   prompt.
-- The main process file grows by **547 bytes** — the patches below.
-- Everything else is *added* alongside, never rewritten.
+- The main process file grows by **547 bytes**. That is everything in the table
+  below.
+- Nothing else is rewritten. The rest is added alongside.
 
 ### What is changed, and why
 
 | Change | Why |
 | --- | --- |
 | `--no-sandbox` when launched from an AppImage | AppImages ship no setuid `chrome-sandbox` helper, so Chromium's sandbox cannot start and the app refuses to launch. |
-| Preload scripts renamed `.mjs` → `.cjs` | Sandboxed preloads are evaluated as CommonJS, so an ESM preload never runs — no IPC channel reaches the interface and you get a blank window. |
-| Tray icon uses the bundled PNG instead of the `.ico` | Electron on Linux cannot decode a Windows `.ico`; the resulting throw silently cancels the rest of app startup. |
-| `edge.js` tolerates a missing .NET runtime | Parts of Input are C#. Without this the app dies on launch on any machine without .NET 8 instead of just disabling those features. |
+| Preload scripts renamed `.mjs` → `.cjs` | Sandboxed preloads are evaluated as CommonJS, so an ESM preload never runs. No IPC channel reaches the interface and you get a blank window. |
+| Tray icon uses the bundled PNG instead of the `.ico` | Electron on Linux cannot decode a Windows `.ico`, and the resulting error silently cancels the rest of app startup. |
+| `edge.js` tolerates a missing .NET runtime | Parts of Input are written in C#. Without this the app dies on launch on any machine without .NET 8, instead of just disabling those features. |
 | Frameless window, with the menu moved into a hamburger | Upstream builds a macOS-shaped menu bar. Linux draws it as a GTK strip inside the window, stacking three bars on top of each other. |
-| A udev permission prompt is added | Linux needs a udev rule to reach USB HID devices; Windows and macOS don't. |
-| The in-app update check points here instead of upstream | **This is a real behavioural change.** Left alone, Input would check Work Louder's feed and offer you a Windows installer. It now checks this repository's releases, so "update" gives you a newer AppImage. |
+| A udev permission prompt is added | Linux needs a udev rule to reach USB HID devices. Windows and macOS don't. |
+| The in-app update check points here instead of upstream | **This one is a real behavioural change.** Left alone, Input would check Work Louder's feed and offer you a Windows installer. It now checks this repository's releases, so "update" gets you a newer AppImage. |
 
 Nothing is added that phones home, and no telemetry or analytics behaviour is
-touched — Input's own privacy prompt still governs that, exactly as it does on
-Windows. Nothing is downloaded at runtime either: the udev installer runs from a
+touched. Input's own privacy prompt still governs that exactly as it does on
+Windows. Nothing is fetched at runtime either, since the udev installer runs from a
 copy inside the AppImage.
 
 ### Check for yourself
 
-Please do. The patches are one readable file — [`scripts/patch-app.py`](scripts/patch-app.py)
-— and everything injected lives in [`patch/`](patch/). Nothing is hidden in a
-binary blob.
+Please do. The patches are one readable file,
+[`scripts/patch-app.py`](scripts/patch-app.py), and everything injected lives in
+[`patch/`](patch/). None of it is hidden in a binary blob.
 
 To see the exact difference against the official app, build it and diff the two:
 
@@ -137,11 +142,11 @@ Linux needs a udev rule before a non-root program can talk to your keyboard, so 
 first time you launch Input it shows a **Device Setup Required** prompt.
 
 Press **Install now** and approve the system password dialog. The installer ships
-inside the AppImage — nothing is downloaded, and the prompt disappears on its own
+inside the AppImage, so nothing is downloaded, and the prompt goes away by itself
 once the rules exist. Then **unplug and replug your keyboard**.
 
-The prompt only appears when the rules are genuinely missing, so if you see it
-again later, something removed them.
+The prompt only appears when the rules are genuinely missing. If it comes back
+later, something removed them.
 
 <details>
 <summary><strong>Installing them by hand instead</strong></summary>
@@ -169,9 +174,9 @@ Work Louder (`303a`) and Nomad (`574c`) devices.
 <details>
 <summary><strong>The app doesn't detect my device</strong></summary>
 
-Almost always the udev rules — see [Device permissions](#device-permissions).
-Remember to replug the keyboard afterwards, since rules are applied when the device
-is connected.
+Almost always the udev rules. See [Device permissions](#device-permissions).
+Remember to replug the keyboard afterwards, since the rules are applied when the
+device is connected.
 
 </details>
 
@@ -185,29 +190,32 @@ equivalent). To rule FUSE out entirely, run it extracted:
 ./Input-*.AppImage --appimage-extract-and-run
 ```
 
+Installing through [AppManager](https://github.com/kem-a/AppManager) avoids the
+problem, since it doesn't rely on FUSE.
+
 </details>
 
 <details>
 <summary><strong>Some features silently do nothing</strong></summary>
 
 Parts of Input are written in C# and need the .NET 8 runtime. The AppImage starts
-fine without it — those features are simply disabled rather than crashing the app.
-Install `dotnet-runtime-8.0` from your distribution to enable them.
+fine without it, and those features are disabled rather than taking the app down.
+Install `dotnet-runtime-8.0` from your distribution to switch them on.
 
 </details>
 
 <details>
 <summary><strong>It opens to a blank window</strong></summary>
 
-That shouldn't happen — every release is startup-tested for exactly this. Please
-[open an issue](https://github.com/SilkePilon/input-linux/issues) with your
+That shouldn't happen, since every release is startup-tested for exactly this.
+Please [open an issue](https://github.com/SilkePilon/input-linux/issues) with your
 distribution and the output of running the AppImage from a terminal.
 
 </details>
 
 ## Build it yourself
 
-You don't need to — releases are automatic — but the whole thing is one script.
+You don't need to, since releases are automatic, but the whole thing is one script.
 
 ### Requirements
 
@@ -241,7 +249,7 @@ cd input-linux
 
 That resolves the latest stable Input release, downloads that version's official
 Windows installer, rebuilds the native modules for Linux, applies the patches,
-packages an AppImage and smoke-tests it.
+packages an AppImage and starts it to check the result.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
@@ -260,39 +268,39 @@ CHANNEL=prerelease ./build-appimage.sh
 
 ## How it works
 
-[What's changed from the official app](#whats-changed-from-the-official-app)
-lists the patches themselves; this is how they are applied.
+[What's changed from the official app](#whats-changed-from-the-official-app) lists
+the patches themselves. This is how they get applied.
 
-Every patch lives in `scripts/patch-app.py`. They target a minified bundle
-produced by a build nobody here controls, so each one matches on a regex tolerant
-of whitespace and renamed local variables rather than on a fixed string. Each is
-idempotent, and each is **required**: if one stops matching a future Input version
-the build fails loudly instead of shipping an AppImage that starts into a blank
-window. That is deliberate — this port has previously shipped releases where a
+Every patch lives in `scripts/patch-app.py`. They target a minified bundle produced
+by a build nobody here controls, so each one matches on a regex that tolerates
+changed whitespace and renamed local variables rather than on a fixed string. Each
+is idempotent, and each is **required**: if one stops matching a future Input
+version, the build fails loudly instead of shipping an AppImage that opens to a
+blank window. That is deliberate. This port has previously shipped releases where a
 patch silently did nothing.
 
-The renderer is modified by injecting `patch/dist/index-{head,body}-*.html`
-fragments into the app's own `index.html`, rather than shipping a replacement copy
-of it. Each Input version references its own content-hashed asset bundles, so a
-static copy would break every version but the one it came from.
+The interface is modified by injecting `patch/dist/index-{head,body}-*.html`
+fragments into the app's own `index.html` rather than shipping a replacement copy of
+it. Each Input version references its own content-hashed asset bundles, so a static
+copy would break every version except the one it came from.
 
 ### The window chrome
 
 On Linux the window is created with `frame: false`, so the app's own black header
 *is* the top of the window. The GTK menu bar is hidden with `autoHideMenuBar`, which
-keeps every accelerator registered — Undo/Redo, cut/copy/paste and the zoom
-shortcuts all still work, and <kbd>Alt</kbd> reveals the bar.
+keeps every accelerator registered. Undo/Redo, cut/copy/paste and the zoom shortcuts
+all still work, and <kbd>Alt</kbd> reveals the bar.
 
-The commands that used to live in that bar (including **Download Logs**) are
-re-presented as a hamburger dropdown in the header. It is not a reimplementation:
+The commands that used to live in that bar (including **Download Logs**) show up as
+a hamburger dropdown in the header instead. It isn't a reimplementation of the menu.
 `linux-app-menu.js` reads `Menu.getApplicationMenu()` when the dropdown opens and
 serialises it, tagging each entry with the index path used to find the real
 `MenuItem` again on click. Whatever upstream puts in its menu appears automatically.
 
-Minimise, maximise and close are HTML styled from the app's own palette — `#eeff01`
+Minimise, maximise and close are HTML, styled from the app's own palette: `#eeff01`
 accent, `#ff0004` red, 10px corners, 2px round-capped strokes. The window corners
-are rounded in CSS, which requires `transparent: true`, because an undecorated
-window gets no rounding from the compositor and the root element's background would
+are rounded in CSS, which needs `transparent: true`, because an undecorated window
+gets no rounding from the compositor and the root element's background would
 otherwise paint across the whole canvas.
 
 | File | Role |
@@ -306,7 +314,7 @@ otherwise paint across the whole canvas.
 ### Smoke test
 
 Every build ships a dormant harness that `INPUT_SMOKE_TEST=1` activates. It waits
-for the main window, verifies the renderer mounted and the preload's globals
+for the main window, verifies the interface mounted and the preload's globals
 arrived, opens the hamburger and measures it, checks the window chrome, watches for
 main-process unhandled rejections, and captures a screenshot.
 
@@ -315,14 +323,14 @@ main-process unhandled rejections, and captures a screenshot.
 ./scripts/smoke-test.sh path/to.AppImage
 ```
 
-It runs at the end of every build and in CI, on headless machines via `xvfb-run`.
+It runs at the end of every build and in CI, using `xvfb-run` on headless machines.
 A release is never published if it fails.
 
 ## Contributing
 
-Pull requests are welcome — this is maintained on a best-effort basis by the
+Pull requests are welcome. This is maintained on a best-effort basis by the
 community. If a patch stops applying after an upstream release, the build output
-names the one that failed; the fix goes in `scripts/patch-app.py`.
+names the one that failed, and the fix goes in `scripts/patch-app.py`.
 
 ## License
 
