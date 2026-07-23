@@ -1,12 +1,24 @@
 name: Build and Release Input AppImage
 
 on:
+  schedule:
+    - cron: '17 6 * * *'
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Release tag (e.g. v0.15.3-Community)'
+      version:
+        description: 'Input version to build (blank = whatever upstream has that is new)'
         required: false
-        default: 'v0.15.3-Community'
+        default: ''
+      prerelease:
+        description: 'Publish as a GitHub pre-release (only used with an explicit version)'
+        required: false
+        default: false
+        type: boolean
+      force:
+        description: 'Rebuild even if a release for the version already exists'
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - 'v*-Community'
@@ -14,9 +26,79 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-appimage
+  cancel-in-progress: false
+
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      builds: ${{ steps.plan.outputs.builds }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Work out which versions still need building
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+          REQUESTED_PRERELEASE: ${{ github.event.inputs.prerelease }}
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            version="${version%-Community}"
+            prerelease=false
+            [[ "$version" == *-* ]] && prerelease=true
+            candidates=$(jq -cn --arg v "$version" --argjson p "$prerelease" \
+              '[{version: $v, prerelease: $p}]')
+          elif [[ -n "$REQUESTED_VERSION" ]]; then
+            prerelease="${REQUESTED_PRERELEASE:-false}"
+            [[ "$REQUESTED_VERSION" == *-* ]] && prerelease=true
+            candidates=$(jq -cn --arg v "$REQUESTED_VERSION" --argjson p "$prerelease" \
+              '[{version: $v, prerelease: $p}]')
+          else
+            candidates=$(python3 scripts/upstream-releases.py plan)
+          fi
+
+          echo "Upstream candidates: $candidates"
+
+          builds='[]'
+          for row in $(echo "$candidates" | jq -r '.[] | @base64'); do
+            entry=$(echo "$row" | base64 -d)
+            version=$(echo "$entry" | jq -r '.version')
+            prerelease=$(echo "$entry" | jq -r '.prerelease')
+            tag="v${version}-Community"
+
+            if [[ "$FORCE" != "true" ]] && [[ "${{ github.event_name }}" != "push" ]] \
+               && gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "$tag already released, skipping."
+              continue
+            fi
+
+            echo "$tag needs building."
+            builds=$(echo "$builds" | jq -c --arg v "$version" --arg t "$tag" \
+              --argjson p "$prerelease" '. + [{version: $v, tag: $t, prerelease: $p}]')
+          done
+
+          echo "builds=$builds" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "$builds" | jq 'length')" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: resolve
+    if: needs.resolve.outputs.count != '0'
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build: ${{ fromJSON(needs.resolve.outputs.builds) }}
+    name: Build ${{ matrix.build.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,7 +113,8 @@ jobs:
             python3 \
             python3-venv \
             libssl-dev \
-            libfuse2
+            libfuse2 \
+            xvfb
           sudo npm install -g asar
 
       - name: Set up .NET SDK
@@ -45,38 +128,58 @@ jobs:
           node-version: '22'
 
       - name: Build AppImage
-        run: bash input4linux-0.15.3.sh
+        env:
+          VERSION: ${{ matrix.build.version }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SKIP_SMOKE_TEST: 'true'
+        run: bash build-appimage.sh
 
-      - name: Determine release tag
-        id: tag
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Smoke-test the AppImage
+        run: bash scripts/smoke-test.sh
+
+      - name: Upload smoke test log and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-${{ matrix.build.version }}
+          path: |
+            smoke-test.log
+            smoke-test.png
+          if-no-files-found: ignore
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Input-${{ matrix.build.version }}-Community-AppImage
+          path: Input-*.AppImage
+          if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.name }}
-          name: Input ${{ steps.tag.outputs.name }}
+          tag_name: ${{ matrix.build.tag }}
+          name: Input ${{ matrix.build.tag }}
           body: |
-            Community-built Linux AppImage for Input ${{ steps.tag.outputs.name }}.
+            Community-built Linux AppImage for **Input ${{ matrix.build.version }}**.
 
-            Built from the official Windows installer using [input-linux](https://github.com/worklouder/input-linux).
+            Repackaged automatically from the official Windows installer published at
+            [worklouder/input-releases](https://github.com/worklouder/input-releases/releases/tag/v${{ matrix.build.version }}).
 
             ### Installation
+
             ```bash
             chmod +x Input-*.AppImage
             ./Input-*.AppImage
             ```
 
-            You may also need to install udev rules for your device:
+            You may also need udev rules for your device:
+
             ```bash
-            curl -sSL https://raw.githubusercontent.com/worklouder/input-linux/main/patch/dist-electron/scripts/install-udev-worklouder.sh | sudo bash
+            curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/patch/dist-electron/scripts/install-udev-worklouder.sh | sudo bash
             ```
-          files: Input-*.AppImage
+          files: |
+            Input-*.AppImage
+            latest-linux.yml
           draft: false
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ matrix.build.prerelease }}
+          make_latest: ${{ !matrix.build.prerelease }}

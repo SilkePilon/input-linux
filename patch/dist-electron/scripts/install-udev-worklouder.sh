@@ -1,14 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
+if [[ $EUID -eq 0 ]]; then
+  SUDO=""
+else
+  SUDO="sudo"
+fi
+
 RULE_FILE="/etc/udev/rules.d/99-worklouder.rules"
 TEMP_FILE="$(mktemp)"
 VENDOR_WORKLOUDER="303a"
 VENDOR_NOMAD="574c"
 
-# ---------------------------
-#  Detect platform / group
-# ---------------------------
 detect_group() {
   local osr="/etc/os-release"
   local group="plugdev"
@@ -31,37 +34,29 @@ detect_group() {
 UDEV_GROUP="$(detect_group)"
 echo "Using group: $UDEV_GROUP"
 
-# Warn users about missing groups
 if ! getent group "$UDEV_GROUP" >/dev/null; then
   echo "Warning: group '$UDEV_GROUP' does not exist. Creating it..."
-  sudo groupadd "$UDEV_GROUP"
+  $SUDO groupadd "$UDEV_GROUP"
 fi
 
-# ---------------------------
-#  Uninstall mode
-# ---------------------------
 if [[ "${1:-}" == "uninstall" ]]; then
   echo "Uninstalling Work Louder udev rules…"
   if [[ -f "$RULE_FILE" ]]; then
-    sudo rm "$RULE_FILE"
+    $SUDO rm "$RULE_FILE"
     echo "Removed $RULE_FILE"
   else
     echo "No rules found at $RULE_FILE"
   fi
 
   echo "Reloading udev..."
-  sudo udevadm control --reload
-  sudo udevadm trigger
-  sudo udevadm settle
+  $SUDO udevadm control --reload
+  $SUDO udevadm trigger
+  $SUDO udevadm settle
   echo "Done."
   exit 0
 fi
 
-
-# ---------------------------
-#  Generate new rules
-# ---------------------------
-sudo tee "$TEMP_FILE" >/dev/null <<EOF
+$SUDO tee "$TEMP_FILE" >/dev/null <<EOF
 # Work Louder / Nomad – Udev rules
 # Generated on $(date)
 
@@ -89,21 +84,13 @@ ATTRS{name}=="Work Louder*", MODE="0666", GROUP="$UDEV_GROUP", TAG+="uaccess"
 
 EOF
 
-
-# ---------------------------
-#  Install the rule
-# ---------------------------
 echo "Installing udev rules to $RULE_FILE…"
-sudo mv "$TEMP_FILE" "$RULE_FILE"
-sudo chmod 644 "$RULE_FILE"
+$SUDO mv "$TEMP_FILE" "$RULE_FILE"
+$SUDO chmod 644 "$RULE_FILE"
 
-
-# ---------------------------
-#  Reload udev
-# ---------------------------
 echo "Reloading udev rules..."
-sudo udevadm control --reload
-sudo udevadm trigger
-sudo udevadm settle
+$SUDO udevadm control --reload
+$SUDO udevadm trigger
+$SUDO udevadm settle
 
 echo "Done! Please unplug/replug your device or restart the Input app."

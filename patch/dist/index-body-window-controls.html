@@ -1,0 +1,220 @@
+    <script>
+      (function () {
+        if (!window.inputLinuxWindow) return;
+
+        var NAVBAR_SELECTOR = '[class*="_navbar_"]';
+        var CONTROLS_ID = "input-linux-window-controls";
+        var PANEL_ID = "input-linux-menu-panel";
+        var PANEL_OPEN_CLASS = "is-open";
+        var MAXIMIZED_CLASS = "input-linux-maximized";
+        var PANEL_GAP_PX = 6;
+        var PANEL_MIN_EDGE_GAP_PX = 4;
+
+        var ICONS = {
+          menu: '<path d="M6 8h12" /><path d="M6 12h12" /><path d="M6 16h12" />',
+          minimize: '<path d="M6 12h12" />',
+          maximize: '<rect x="5.5" y="5.5" width="13" height="13" rx="3" />',
+          restore: '<path d="M10 6h8v8" /><rect x="6" y="10" width="8" height="8" rx="2.5" />',
+          close: '<path d="M6.5 6.5l11 11" /><path d="M17.5 6.5l-11 11" />',
+        };
+
+        function svg(shape) {
+          return (
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" ' +
+            'aria-hidden="true">' +
+            shape +
+            "</svg>"
+          );
+        }
+
+        function button(action, label, shape) {
+          var element = document.createElement("button");
+          element.type = "button";
+          element.dataset.action = action;
+          element.setAttribute("aria-label", label);
+          element.setAttribute("title", label);
+          element.innerHTML = svg(shape);
+          return element;
+        }
+
+        function createMenu(trigger) {
+          var panel = document.createElement("div");
+          panel.id = PANEL_ID;
+          panel.setAttribute("role", "menu");
+          document.body.appendChild(panel);
+
+          function isOpen() {
+            return panel.classList.contains(PANEL_OPEN_CLASS);
+          }
+
+          function anchorToTrigger() {
+            var rect = trigger.getBoundingClientRect();
+            panel.style.top = rect.bottom + PANEL_GAP_PX + "px";
+            panel.style.right =
+              Math.max(PANEL_MIN_EDGE_GAP_PX, window.innerWidth - rect.right) + "px";
+          }
+
+          function close() {
+            panel.classList.remove(PANEL_OPEN_CLASS);
+            trigger.setAttribute("aria-expanded", "false");
+          }
+
+          function renderItem(item) {
+            if (item.type === "separator") {
+              var rule = document.createElement("div");
+              rule.className = "input-linux-menu-separator";
+              return rule;
+            }
+
+            var entry = document.createElement("button");
+            entry.type = "button";
+            entry.className = "input-linux-menu-item";
+            entry.setAttribute("role", "menuitem");
+            entry.disabled = !item.enabled;
+
+            var label = document.createElement("span");
+            label.className = "input-linux-menu-label";
+            label.textContent = item.label;
+            entry.appendChild(label);
+
+            var keys = document.createElement("span");
+            keys.className = "input-linux-menu-keys";
+            keys.textContent = item.accelerator || "";
+            entry.appendChild(keys);
+
+            entry.addEventListener("click", function () {
+              close();
+              window.inputLinuxWindow.invokeMenuItem(item.path);
+            });
+            return entry;
+          }
+
+          function render(sections) {
+            panel.innerHTML = "";
+            sections.forEach(function (section) {
+              if (!section.submenu || section.submenu.length === 0) return;
+              var heading = document.createElement("div");
+              heading.className = "input-linux-menu-heading";
+              heading.textContent = section.label;
+              panel.appendChild(heading);
+              section.submenu.forEach(function (item) {
+                panel.appendChild(renderItem(item));
+              });
+            });
+            if (!panel.childNodes.length) {
+              var empty = document.createElement("div");
+              empty.className = "input-linux-menu-heading";
+              empty.textContent = "No menu available";
+              panel.appendChild(empty);
+            }
+          }
+
+          function open(sections) {
+            render(sections || []);
+            panel.classList.remove(PANEL_OPEN_CLASS);
+            anchorToTrigger();
+            void panel.offsetWidth;
+            panel.classList.add(PANEL_OPEN_CLASS);
+            trigger.setAttribute("aria-expanded", "true");
+          }
+
+          trigger.addEventListener("click", function (event) {
+            event.stopPropagation();
+            if (isOpen()) {
+              close();
+              return;
+            }
+            window.inputLinuxWindow.getMenu().then(open).catch(function () {});
+          });
+
+          document.addEventListener("click", function (event) {
+            if (!isOpen()) return;
+            if (trigger.contains(event.target) || panel.contains(event.target)) return;
+            close();
+          });
+          document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") close();
+          });
+          window.addEventListener("resize", function () {
+            if (isOpen()) anchorToTrigger();
+          });
+
+          return panel;
+        }
+
+        function buildControls() {
+          var container = document.createElement("div");
+          container.id = CONTROLS_ID;
+
+          var menu = button("menu", "Menu", ICONS.menu);
+          menu.setAttribute("aria-haspopup", "true");
+          menu.setAttribute("aria-expanded", "false");
+
+          var minimize = button("minimize", "Minimize", ICONS.minimize);
+          var maximize = button("maximize", "Maximize", ICONS.maximize);
+          var close = button("close", "Close", ICONS.close);
+
+          minimize.addEventListener("click", function () {
+            window.inputLinuxWindow.minimize();
+          });
+          maximize.addEventListener("click", function () {
+            window.inputLinuxWindow.toggleMaximize();
+          });
+          close.addEventListener("click", function () {
+            window.inputLinuxWindow.close();
+          });
+
+          container.appendChild(menu);
+          container.appendChild(minimize);
+          container.appendChild(maximize);
+          container.appendChild(close);
+
+          function applyState(state) {
+            var maximized = !!(state && state.maximized);
+            document.documentElement.classList.toggle(MAXIMIZED_CLASS, maximized);
+            maximize.innerHTML = svg(maximized ? ICONS.restore : ICONS.maximize);
+            var label = maximized ? "Restore" : "Maximize";
+            maximize.setAttribute("aria-label", label);
+            maximize.setAttribute("title", label);
+          }
+
+          window.inputLinuxWindow.getState().then(applyState).catch(function () {});
+          window.inputLinuxWindow.onStateChange(applyState);
+
+          createMenu(menu);
+          return container;
+        }
+
+        function removeById(id) {
+          var existing = document.getElementById(id);
+          if (existing && existing.parentNode) {
+            existing.parentNode.removeChild(existing);
+          }
+        }
+
+        function mount() {
+          var navbar = document.querySelector(NAVBAR_SELECTOR);
+          if (!navbar) return;
+          if (navbar.querySelector("#" + CONTROLS_ID)) return;
+
+          removeById(CONTROLS_ID);
+          removeById(PANEL_ID);
+          navbar.appendChild(buildControls());
+        }
+
+        function start() {
+          mount();
+          new MutationObserver(mount).observe(document.body, {
+            childList: true,
+            subtree: true,
+          });
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", start);
+        } else {
+          start();
+        }
+      })();
+    </script>

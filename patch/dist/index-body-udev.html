@@ -1,0 +1,180 @@
+    <div id="udev-popup">
+      <div id="udev-popup-content">
+        <button2 id="udev-close-btn" title="Close popup">×</button2>
+        <h2>Device Setup Required</h2>
+        <h4 id="udev-message">
+          Linux needs a udev rule before Input can talk to your Work Louder device.
+        </h4>
+        <pre id="udev-command" style="display:none;background:#f3f3f3;padding:0.5em;border-radius:5px;font-size:0.85em;overflow:auto;"></pre>
+        <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1rem;">
+          <button id="udev-install-btn">Install now</button>
+          <button id="udev-copy-btn">Copy command</button>
+          <button id="udev-hide-btn">Don't show again</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.addEventListener('DOMContentLoaded', async () => {
+        const popup = document.getElementById('udev-popup');
+        const message = document.getElementById('udev-message');
+        const commandBox = document.getElementById('udev-command');
+        const installBtn = document.getElementById('udev-install-btn');
+        const copyBtn = document.getElementById('udev-copy-btn');
+        const hideBtn = document.getElementById('udev-hide-btn');
+        const closeBtn = document.getElementById('udev-close-btn');
+        const bridge = window.inputLinuxWindow;
+
+        const DISMISSED_KEY = 'udev-setup-done';
+        const NEEDS_REPLUG = 'Rules installed. Unplug and replug your keyboard to finish.';
+
+        function show() {
+          popup.classList.add('show');
+        }
+
+        function hide() {
+          popup.classList.remove('show');
+        }
+
+        async function rulesInstalled() {
+          if (!bridge || !bridge.getUdevStatus) return false;
+          try {
+            const status = await bridge.getUdevStatus();
+            return !!(status && status.rulesInstalled);
+          } catch (error) {
+            return false;
+          }
+        }
+
+        async function refresh() {
+          if (await rulesInstalled()) {
+            hide();
+            return true;
+          }
+          if (localStorage.getItem(DISMISSED_KEY) !== 'true') {
+            show();
+          }
+          return false;
+        }
+
+        if (bridge && bridge.getUdevStatus) {
+          const status = await bridge.getUdevStatus().catch(() => null);
+          if (!status || !status.canElevate) {
+            installBtn.style.display = 'none';
+          }
+        } else {
+          installBtn.style.display = 'none';
+        }
+
+        await refresh();
+
+        closeBtn.addEventListener('click', hide);
+
+        hideBtn.addEventListener('click', () => {
+          localStorage.setItem(DISMISSED_KEY, 'true');
+          hide();
+        });
+
+        installBtn.addEventListener('click', async () => {
+          installBtn.disabled = true;
+          const previous = installBtn.textContent;
+          installBtn.textContent = 'Installing...';
+          try {
+            const result = await bridge.installUdevRules();
+            if (result && result.ok) {
+              message.textContent = NEEDS_REPLUG;
+              installBtn.style.display = 'none';
+              copyBtn.style.display = 'none';
+              hideBtn.textContent = 'Close';
+              localStorage.setItem(DISMISSED_KEY, 'true');
+              return;
+            }
+            message.textContent =
+              'Could not install the rules automatically' +
+              (result && result.error ? ': ' + result.error : '.') +
+              ' Use "Copy command" instead.';
+          } catch (error) {
+            message.textContent =
+              'Could not install the rules automatically. Use "Copy command" instead.';
+          }
+          installBtn.disabled = false;
+          installBtn.textContent = previous;
+        });
+
+        copyBtn.addEventListener('click', async () => {
+          let command = null;
+          if (bridge && bridge.stageUdevInstaller) {
+            const staged = await bridge.stageUdevInstaller().catch(() => null);
+            if (staged && staged.ok && staged.path) {
+              command = 'sudo bash "' + staged.path + '"';
+            }
+          }
+          if (!command) {
+            command =
+              'curl -sSL https://raw.githubusercontent.com/__RELEASE_REPO__/main/patch/dist-electron/scripts/install-udev-worklouder.sh | sudo bash';
+          }
+
+          commandBox.textContent = command;
+          commandBox.style.display = 'block';
+
+          try {
+            await navigator.clipboard.writeText(command);
+            copyBtn.textContent = 'Copied';
+          } catch (error) {
+            copyBtn.textContent = 'Copy failed';
+          }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && popup.classList.contains('show')) refresh();
+        });
+
+        const observer = new MutationObserver(() => {
+          const syncBanner = document.querySelector('[class*="sync_countdown_container"]');
+          const releaseButton = document.querySelector('._release__button_1jm4y_1');
+
+          const connectionText = document.querySelector('._connection__text_vh5hj_19');
+          if (connectionText && !connectionText.dataset.listenerAttached) {
+            connectionText.style.cursor = 'pointer';
+            connectionText.title = 'Click to reinstall udev permissions';
+            connectionText.addEventListener('click', () => {
+              localStorage.removeItem(DISMISSED_KEY);
+              show();
+            });
+            connectionText.dataset.listenerAttached = 'true';
+          }
+
+          if (releaseButton && !releaseButton.dataset.listenerAttached) {
+            releaseButton.style.cursor = 'pointer';
+            releaseButton.title = 'View latest releases on GitHub';
+            releaseButton.innerText = 'New Input version available. View on GitHub!';
+            releaseButton.addEventListener('click', () => {
+              window.open('https://github.com/__RELEASE_REPO__/releases', '_blank');
+            });
+            releaseButton.dataset.listenerAttached = 'true';
+          }
+
+          const inputMenu = document.querySelector('#input-dropdown-menu');
+          if (inputMenu && !document.getElementById('udev-menu-item')) {
+            const udevItem = document.createElement('li');
+            udevItem.textContent = 'Run Udev Setup';
+            udevItem.id = 'udev-menu-item';
+            udevItem.style.cursor = 'pointer';
+            udevItem.addEventListener('click', () => {
+              localStorage.removeItem(DISMISSED_KEY);
+              show();
+            });
+            inputMenu.appendChild(udevItem);
+          }
+
+          if (syncBanner && connectionText && releaseButton) {
+            observer.disconnect();
+          }
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+        });
+      });
+    </script>

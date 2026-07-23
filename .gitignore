@@ -1,5 +1,8 @@
 # Build output
 *.AppImage
+latest-linux.yml
+smoke-test.log
+smoke-test.png
 
 # Temporary build directories
 input_download/
@@ -11,3 +14,6 @@ input-app/
 # Accidentally-placed root package.json from aborted build runs
 /package.json
 /package-lock.json
+
+# Python bytecode
+__pycache__/

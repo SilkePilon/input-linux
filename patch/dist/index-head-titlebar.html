@@ -1,0 +1,217 @@
+    <style>
+      [class*="_navbar_"] {
+        -webkit-app-region: drag;
+        flex: 0 0 auto;
+        height: __TITLEBAR_HEIGHT__px;
+        min-height: __TITLEBAR_HEIGHT__px;
+        box-sizing: border-box;
+        padding-right: 148px;
+      }
+
+      [class*="_navbar_"] a,
+      [class*="_navbar_"] button,
+      [class*="_navbar_"] input,
+      [class*="_navbar_"] select,
+      [class*="_navbar_"] textarea,
+      [class*="_navbar_"] label,
+      [class*="_navbar_"] svg,
+      [class*="_navbar_"] img,
+      [class*="_navbar_"] [role="button"],
+      [class*="_navbar_"] [role="tab"],
+      [class*="_navbar_"] [role="link"],
+      [class*="_navbar_"] [role="menuitem"],
+      [class*="_navbar_"] [tabindex]:not([tabindex="-1"]),
+      [class*="_navbar_"] [onclick] {
+        -webkit-app-region: no-drag;
+      }
+
+      #input-linux-window-controls {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        height: 100%;
+        padding-right: 8px;
+        gap: 4px;
+        -webkit-app-region: no-drag;
+      }
+
+      #input-linux-window-controls button {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #fff;
+        cursor: pointer;
+        transition: background-color 120ms ease, color 120ms ease;
+        -webkit-app-region: no-drag;
+      }
+
+      #input-linux-window-controls button svg {
+        display: block;
+        width: 16px;
+        height: 16px;
+      }
+
+      #input-linux-window-controls button:hover,
+      #input-linux-window-controls button[aria-expanded="true"] {
+        background-color: #eeff01;
+        color: #000;
+      }
+
+      #input-linux-window-controls button:active {
+        background-color: #d4e400;
+      }
+
+      #input-linux-window-controls button[data-action="close"]:hover {
+        background-color: #ff0004;
+        color: #fff;
+      }
+
+      #input-linux-window-controls button[data-action="close"]:active {
+        background-color: #d90003;
+      }
+
+      #input-linux-window-controls button:focus-visible {
+        outline: 2px solid #eeff01;
+        outline-offset: 2px;
+      }
+
+      #input-linux-menu-panel {
+        box-sizing: border-box;
+        font-family: HKNova, system-ui, -apple-system, "Segoe UI", sans-serif;
+        position: fixed;
+        z-index: 2147483000;
+        width: max-content;
+        min-width: 264px;
+        max-width: min(420px, calc(100vw - 16px));
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        margin: 0;
+        padding: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 12px;
+        background-color: #000;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+        color: #fff;
+        text-align: left;
+        direction: ltr;
+        -webkit-app-region: no-drag;
+
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-8px) scale(0.96);
+        transform-origin: top right;
+        transition: opacity 120ms ease, transform 120ms ease,
+          visibility 0s linear 120ms;
+      }
+
+      #input-linux-menu-panel.is-open {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        transition: opacity 140ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+          visibility 0s;
+      }
+
+      #input-linux-menu-panel .input-linux-menu-heading {
+        box-sizing: border-box;
+        padding: 10px 10px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-align: left;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      #input-linux-menu-panel .input-linux-menu-separator {
+        height: 1px;
+        margin: 6px 10px;
+        background-color: rgba(255, 255, 255, 0.12);
+      }
+
+      #input-linux-menu-panel .input-linux-menu-item {
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 24px;
+        width: 100%;
+        margin: 0;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #fff;
+        font-size: 14px;
+        line-height: 1.2;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      #input-linux-menu-panel .input-linux-menu-item:hover:not(:disabled),
+      #input-linux-menu-panel .input-linux-menu-item:focus-visible:not(:disabled) {
+        background-color: #eeff01;
+        color: #000;
+        outline: none;
+      }
+
+      #input-linux-menu-panel .input-linux-menu-item:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+
+      #input-linux-menu-panel .input-linux-menu-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+      }
+
+      #input-linux-menu-panel .input-linux-menu-keys {
+        white-space: nowrap;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.45);
+      }
+
+      #input-linux-menu-panel .input-linux-menu-item:hover:not(:disabled) .input-linux-menu-keys,
+      #input-linux-menu-panel
+        .input-linux-menu-item:focus-visible:not(:disabled)
+        .input-linux-menu-keys {
+        color: rgba(0, 0, 0, 0.55);
+      }
+
+      html:root,
+      body {
+        background-color: transparent;
+      }
+
+      #root {
+        background-color: #f2f2f2;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      html.input-linux-maximized #root {
+        border-radius: 0;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #input-linux-window-controls button,
+        #input-linux-menu-panel,
+        #input-linux-menu-panel.is-open {
+          transition: none;
+        }
+      }
+    </style>
